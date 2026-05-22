@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiMo Database Design Engine</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+
+        header { text-align: center; padding: 24px 0 20px; }
+        header h1 { font-size: 1.8em; background: linear-gradient(135deg, #a78bfa, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        header p { color: #888; margin-top: 4px; font-size: 0.95em; }
+        .badge { display: inline-block; margin-top: 8px; padding: 4px 14px; background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.3); border-radius: 20px; font-size: 0.8em; color: #a78bfa; }
+
+        /* Input area */
+        .input-card { background: #12121a; border: 1px solid #1e1e2e; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .input-card h2 { font-size: 1em; color: #a78bfa; margin-bottom: 12px; }
+        textarea { width: 100%; min-height: 100px; padding: 14px; background: #0d0d14; border: 1px solid #1e1e2e; border-radius: 8px; color: #e0e0e0; font-size: 0.95em; resize: vertical; outline: none; font-family: inherit; }
+        textarea:focus { border-color: #a78bfa; }
+        .input-actions { display: flex; gap: 10px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+        .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #a78bfa, #60a5fa); color: #000; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.3); color: #a78bfa; }
+        .btn-secondary:hover { background: rgba(167,139,250,0.2); }
+        .btn-sm { padding: 6px 14px; font-size: 0.82em; }
+
+        /* Templates */
+        .templates { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .template-card { background: #0d0d14; border: 1px solid #1e1e2e; border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .template-card:hover { border-color: #a78bfa; background: rgba(167,139,250,0.05); }
+        .template-card .icon { font-size: 1.8em; margin-bottom: 6px; }
+        .template-card .name { font-size: 0.85em; font-weight: 600; }
+        .template-card .desc { font-size: 0.72em; color: #666; margin-top: 4px; }
+
+        /* Loading */
+        .loading { text-align: center; padding: 30px; display: none; }
+        .loading.active { display: block; }
+        .spinner { width: 36px; height: 36px; border: 3px solid #1e1e2e; border-top-color: #a78bfa; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: #12121a; border-radius: 10px; padding: 4px; border: 1px solid #1e1e2e; overflow-x: auto; }
+        .tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #888; white-space: nowrap; transition: all 0.2s; }
+        .tab.active { background: #1a1a2e; color: #a78bfa; font-weight: 600; }
+        .tab:hover:not(.active) { color: #ccc; }
+
+        /* Panels */
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* Schema view */
+        .schema-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+        .schema-title { font-size: 1.2em; color: #a78bfa; }
+        .schema-stats { display: flex; gap: 16px; font-size: 0.85em; color: #888; }
+
+        /* Tables grid */
+        .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+        .table-card { background: #12121a; border: 1px solid #1e1e2e; border-radius: 10px; overflow: hidden; }
+        .table-card-header { background: rgba(167,139,250,0.08); padding: 12px 16px; border-bottom: 1px solid #1e1e2e; }
+        .table-card-header h3 { font-size: 0.95em; color: #a78bfa; }
+        .table-card-header p { font-size: 0.78em; color: #666; margin-top: 2px; }
+        .table-card-body { padding: 0; }
+        .col-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; border-bottom: 1px solid #14141e; font-size: 0.82em; }
+        .col-row:last-child { border-bottom: none; }
+        .col-name { font-weight: 600; color: #e0e0e0; }
+        .col-type { color: #60a5fa; font-family: monospace; font-size: 0.9em; }
+        .col-badges { display: flex; gap: 4px; }
+        .col-badge { padding: 1px 6px; border-radius: 4px; font-size: 0.7em; font-weight: 600; }
+        .badge-pk { background: rgba(250,204,21,0.15); color: #facc15; }
+        .badge-fk { background: rgba(96,165,250,0.15); color: #60a5fa; }
+        .badge-nn { background: rgba(255,107,53,0.15); color: #ff6b35; }
+        .badge-uq { background: rgba(0,212,170,0.15); color: #00d4aa; }
+
+        /* ERD */
+        .erd-container { width: 100%; overflow: auto; background: #0d0d14; border-radius: 10px; border: 1px solid #1e1e2e; min-height: 400px; position: relative; }
+        .erd-svg { width: 100%; min-height: 500px; }
+
+        /* SQL view */
+        .sql-block { background: #0d0d14; border: 1px solid #1e1e2e; border-radius: 10px; padding: 16px; overflow-x: auto; }
+        .sql-block pre { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.82em; line-height: 1.6; color: #a78bfa; white-space: pre-wrap; }
+
+        /* Relationships */
+        .rel-table { width: 100%; border-collapse: collapse; }
+        .rel-table th { text-align: left; padding: 10px; color: #888; font-size: 0.8em; border-bottom: 1px solid #1e1e2e; }
+        .rel-table td { padding: 10px; border-bottom: 1px solid #14141e; font-size: 0.88em; }
+        .rel-arrow { color: #a78bfa; font-weight: 700; }
+
+        /* Recommendations */
+        .rec-item { padding: 12px 16px; background: #0d0d14; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #a78bfa; font-size: 0.9em; color: #bbb; }
+
+        /* Error */
+        .error-msg { display: none; padding: 12px; background: rgba(255,50,50,0.1); border: 1px solid rgba(255,50,50,0.3); border-radius: 8px; color: #ff5050; margin-bottom: 12px; font-size: 0.9em; }
+        .error-msg.active { display: block; }
+
+        footer { text-align: center; padding: 30px 0; color: #444; font-size: 0.8em; }
+        footer a { color: #a78bfa; text-decoration: none; }
+
+        @media (max-width: 600px) {
+            .container { padding: 10px; }
+            header h1 { font-size: 1.4em; }
+            .tables-grid { grid-template-columns: 1fr; }
+            .templates { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MiMo Database Design Engine</h1>
+            <p>Natural language → Production-ready database schema</p>
+            <span class="badge">Powered by MiMo v2.5 Pro</span>
+        </header>
+
+        <div class="input-card">
+            <h2>Describe your project</h2>
+            <textarea id="descInput" placeholder="Example: E-commerce marketplace with multi-vendor support, products with variants, orders, payments, reviews, and seller profiles..."></textarea>
+            <div class="input-actions">
+                <button class="btn btn-primary" id="btnGenerate" onclick="generate()">Generate Schema</button>
+                <span id="timer" style="color:#666;font-size:0.82em"></span>
+            </div>
+        </div>
+
+        <h3 style="color:#666;font-size:0.85em;margin-bottom:10px">Quick Templates</h3>
+        <div class="templates" id="templates"></div>
+
+        <div class="error-msg" id="errorMsg"></div>
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>MiMo is designing your database schema...</p>
+            <p style="color:#666;font-size:0.82em;margin-top:6px">This may take 30-60 seconds</p>
+        </div>
+
+        <div id="resultArea" style="display:none">
+            <div class="schema-header">
+                <div>
+                    <div class="schema-title" id="schemaTitle"></div>
+                    <div class="schema-stats" id="schemaStats"></div>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="btn btn-secondary btn-sm" onclick="exportSQL()">Export SQL</button>
+                    <button class="btn btn-secondary btn-sm" onclick="getOptimizations()">Optimize</button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" onclick="showResultTab('tables')">Tables</div>
+                <div class="tab" onclick="showResultTab('erd')">ERD Diagram</div>
+                <div class="tab" onclick="showResultTab('relationships')">Relationships</div>
+                <div class="tab" onclick="showResultTab('sql')">SQL Migrations</div>
+                <div class="tab" onclick="showResultTab('recommendations')">Recommendations</div>
+                <div class="tab" onclick="showResultTab('optimize')" id="tabOptimize" style="display:none">Optimizations</div>
+            </div>
+
+            <div id="panelTables" class="panel active"></div>
+            <div id="panelErd" class="panel"><div class="erd-container"><svg id="erdSvg" class="erd-svg"></svg></div></div>
+            <div id="panelRelationships" class="panel"></div>
+            <div id="panelSql" class="panel"></div>
+            <div id="panelRecommendations" class="panel"></div>
+            <div id="panelOptimize" class="panel"></div>
+        </div>
+
+        <footer>Built with <a href="https://github.com/XiaomiMiMo/MiMo" target="_blank">MiMo</a></footer>
+    </div>
+
+    <script>
+        let currentSchema = null;
+        let templates = [];
+
+        // Load templates
+        fetch('/api/templates').then(r => r.json()).then(d => {
+            templates = d.templates;
+            renderTemplates();
+        });
+
+        function renderTemplates() {
+            document.getElementById('templates').innerHTML = templates.map(t =>
+                `<div class="template-card" onclick="useTemplate('${t.id}')">
+                    <div class="icon">${t.icon}</div>
+                    <div class="name">${t.name}</div>
+                    <div class="desc">${t.description}</div>
+                </div>`
+            ).join('');
+        }
+
+        function useTemplate(id) {
+            const t = templates.find(x => x.id === id);
+            if (t) {
+                document.getElementById('descInput').value = t.prompt;
+                generate();
+            }
+        }
+
+        async function generate() {
+            const desc = document.getElementById('descInput').value.trim();
+            if (!desc) { document.getElementById('descInput').focus(); return; }
+
+            const btn = document.getElementById('btnGenerate');
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('errorMsg');
+            const result = document.getElementById('resultArea');
+
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            loading.classList.add('active');
+            error.classList.remove('active');
+            result.style.display = 'none';
+
+            const start = Date.now();
+            document.getElementById('timer').textContent = '';
+
+            try {
+                const r = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({description: desc})
+                });
+                const d = await r.json();
+                const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+
+                if (d.success) {
+                    currentSchema = d.schema;
+                    renderSchema(d.schema, elapsed);
+                    result.style.display = 'block';
+                    result.scrollIntoView({behavior: 'smooth', block: 'start'});
+                } else {
+                    error.textContent = d.error || 'Generation failed';
+                    error.classList.add('active');
+                }
+            } catch(e) {
+                error.textContent = 'Error: ' + e.message;
+                error.classList.add('active');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Schema';
+                loading.classList.remove('active');
+            }
+        }
+
+        function renderSchema(schema, elapsed) {
+            document.getElementById('schemaTitle').textContent = schema.project_name || 'Database Schema';
+            document.getElementById('schemaStats').innerHTML = `
+                <span>${schema.tables?.length || 0} tables</span>
+                <span>${schema.relationships?.length || 0} relationships</span>
+                <span>${schema.tables?.reduce((s,t) => s + (t.columns?.length||0), 0) || 0} columns</span>
+                <span>${elapsed}s</span>
+            `;
+
+            renderTables(schema.tables || []);
+            renderERD(schema);
+            renderRelationships(schema.relationships || []);
+            renderSQL(schema.migrations || {});
+            renderRecommendations(schema.recommendations || []);
+        }
+
+        function renderTables(tables) {
+            let html = '<div class="tables-grid">';
+            for (const t of tables) {
+                html += `<div class="table-card">
+                    <div class="table-card-header">
+                        <h3>📋 ${t.name}</h3>
+                        <p>${t.description || ''}</p>
+                    </div>
+                    <div class="table-card-body">`;
+                for (const c of (t.columns || [])) {
+                    let badges = '';
+                    if (c.primary_key) badges += '<span class="col-badge badge-pk">PK</span>';
+                    if (c.references) badges += '<span class="col-badge badge-fk">FK</span>';
+                    if (!c.nullable && !c.primary_key) badges += '<span class="col-badge badge-nn">NN</span>';
+                    if (c.unique && !c.primary_key) badges += '<span class="col-badge badge-uq">UQ</span>';
+                    html += `<div class="col-row">
+                        <span class="col-name">${c.name}</span>
+                        <div style="display:flex;align-items:center;gap:6px">
+                            <span class="col-type">${c.type}</span>
+                            <div class="col-badges">${badges}</div>
+                        </div>
+                    </div>`;
+                }
+                html += '</div></div>';
+            }
+            html += '</div>';
+            document.getElementById('panelTables').innerHTML = html;
+        }
+
+        function renderERD(schema) {
+            const tables = schema.tables || [];
+            const rels = schema.relationships || [];
+            const svg = document.getElementById('erdSvg');
+            
+            if (tables.length === 0) {
+                svg.outerHTML = '<svg id="erdSvg" class="erd-svg"><text x="50%" y="50%" fill="#666" text-anchor="middle">No tables to display</text></svg>';
+                return;
+            }
+
+            const boxW = 200, boxH = 30, headerH = 28, padX = 30, padY = 40;
+            const cols = Math.ceil(Math.sqrt(tables.length));
+            const rows = Math.ceil(tables.length / cols);
+            const svgW = cols * (boxW + padX) + padX;
+            const rowHeights = [];
+            
+            // Calculate max height per row
+            for (let r = 0; r < rows; r++) {
+                let maxCols = 0;
+                for (let c = 0; c < cols; c++) {
+                    const idx = r * cols + c;
+                    if (idx < tables.length) maxCols = Math.max(maxCols, (tables[idx].columns?.length || 0));
+                }
+                rowHeights.push(headerH + maxCols * boxH + 10);
+            }
+            const svgH = rowHeights.reduce((s,h) => s + h + padY, 0) + padY;
+
+            let svgContent = `<svg id="erdSvg" class="erd-svg" viewBox="0 0 ${svgW} ${svgH}" width="${svgW}" height="${svgH}">`;
+            
+            const tablePos = {};
+            
+            // Draw tables
+            let y = padY;
+            for (let r = 0; r < rows; r++) {
+                let x = padX;
+                for (let c = 0; c < cols; c++) {
+                    const idx = r * cols + c;
+                    if (idx >= tables.length) break;
+                    const t = tables[idx];
+                    const h = headerH + (t.columns?.length || 0) * boxH + 10;
+                    
+                    tablePos[t.name] = {x, y, w: boxW, h};
+                    
+                    // Box
+                    svgContent += `<rect x="${x}" y="${y}" width="${boxW}" height="${h}" rx="6" fill="#12121a" stroke="#a78bfa" stroke-width="1.5"/>`;
+                    // Header
+                    svgContent += `<rect x="${x}" y="${y}" width="${boxW}" height="${headerH}" rx="6" fill="rgba(167,139,250,0.15)"/>`;
+                    svgContent += `<rect x="${x}" y="${y+20}" width="${boxW}" height="${headerH-20}" fill="rgba(167,139,250,0.15)"/>`;
+                    svgContent += `<text x="${x+10}" y="${y+19}" fill="#a78bfa" font-size="12" font-weight="700">${t.name}</text>`;
+                    
+                    // Columns
+                    let cy = y + headerH + 5;
+                    for (const col of (t.columns || [])) {
+                        const icon = col.primary_key ? '🔑' : col.references ? '🔗' : '  ';
+                        svgContent += `<text x="${x+10}" y="${cy+14}" fill="#ccc" font-size="10">${icon} ${col.name}</text>`;
+                        svgContent += `<text x="${x+boxW-10}" y="${cy+14}" fill="#60a5fa" font-size="9" text-anchor="end">${col.type}</text>`;
+                        cy += boxH;
+                    }
+                    
+                    x += boxW + padX;
+                }
+                y += rowHeights[r] + padY;
+            }
+
+            // Draw relationships
+            for (const rel of rels) {
+                const from = tablePos[rel.from_table];
+                const to = tablePos[rel.to_table];
+                if (!from || !to) continue;
+                
+                const fx = from.x + from.w / 2;
+                const fy = from.y + from.h;
+                const tx = to.x + to.w / 2;
+                const ty = to.y;
+                
+                const midY = (fy + ty) / 2;
+                svgContent += `<path d="M${fx},${fy} C${fx},${midY} ${tx},${midY} ${tx},${ty}" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>`;
+                svgContent += `<circle cx="${tx}" cy="${ty}" r="4" fill="#a78bfa" opacity="0.8"/>`;
+            }
+
+            svgContent += '</svg>';
+            document.getElementById('erdSvg').outerHTML = svgContent;
+        }
+
+        function renderRelationships(rels) {
+            if (rels.length === 0) {
+                document.getElementById('panelRelationships').innerHTML = '<p style="color:#666">No relationships defined</p>';
+                return;
+            }
+            let html = '<table class="rel-table"><thead><tr><th>From</th><th></th><th>To</th><th>Type</th></tr></thead><tbody>';
+            for (const r of rels) {
+                html += `<tr>
+                    <td>${r.from_table}.${r.from_column}</td>
+                    <td class="rel-arrow">→</td>
+                    <td>${r.to_table}.${r.to_column}</td>
+                    <td>${r.type || 'one_to_many'}</td>
+                </tr>`;
+            }
+            html += '</tbody></table>';
+            document.getElementById('panelRelationships').innerHTML = html;
+        }
+
+        function renderSQL(migrations) {
+            const up = migrations.up || 'No migration generated';
+            document.getElementById('panelSql').innerHTML = `
+                <div class="sql-block"><pre>${escapeHtml(up)}</pre></div>
+            `;
+        }
+
+        function renderRecommendations(recs) {
+            if (recs.length === 0) {
+                document.getElementById('panelRecommendations').innerHTML = '<p style="color:#666">No recommendations</p>';
+                return;
+            }
+            document.getElementById('panelRecommendations').innerHTML = recs.map(r =>
+                `<div class="rec-item">${escapeHtml(r)}</div>`
+            ).join('');
+        }
+
+        async function getOptimizations() {
+            if (!currentSchema) return;
+            document.getElementById('tabOptimize').style.display = 'block';
+            showResultTab('optimize');
+            document.getElementById('panelOptimize').innerHTML = '<div class="loading active"><div class="spinner"></div><p>Analyzing schema...</p></div>';
+
+            try {
+                const r = await fetch('/api/optimize', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({schema: currentSchema})
+                });
+                const d = await r.json();
+                if (d.success && d.suggestions) {
+                    document.getElementById('panelOptimize').innerHTML = d.suggestions.map(s =>
+                        `<div class="rec-item">
+                            <strong style="color:#a78bfa">[${s.category?.toUpperCase()}]</strong> 
+                            <span style="color:${s.priority==='high'?'#ff5050':s.priority==='medium'?'#f7c948':'#00d4aa'}">(${s.priority})</span><br>
+                            <strong>${escapeHtml(s.issue || '')}</strong><br>
+                            ${escapeHtml(s.suggestion || '')}
+                            ${s.example ? `<pre style="margin-top:8px;padding:8px;background:#0a0a0f;border-radius:6px;font-size:0.82em;color:#60a5fa">${escapeHtml(s.example)}</pre>` : ''}
+                        </div>`
+                    ).join('');
+                } else {
+                    document.getElementById('panelOptimize').innerHTML = '<p style="color:#ff5050">Failed to analyze</p>';
+                }
+            } catch(e) {
+                document.getElementById('panelOptimize').innerHTML = '<p style="color:#ff5050">Error: ' + e.message + '</p>';
+            }
+        }
+
+        async function exportSQL() {
+            if (!currentSchema) return;
+            const r = await fetch('/api/export/sql', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({schema: currentSchema})
+            });
+            const d = await r.json();
+            const blob = new Blob([d.sql], {type: 'text/sql'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentSchema.project_name || 'schema'}.sql`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function showResultTab(name) {
+            document.querySelectorAll('#resultArea .panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('#resultArea .tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+            document.querySelector(`#resultArea .tab[onclick="showResultTab('${name}')"]`).classList.add('active');
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+    </script>
+</body>
+</html>
