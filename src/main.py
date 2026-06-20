@@ -20,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MIMO_API = "http://43.153.206.68:20128/v1/chat/completions"
+MIMO_API = os.getenv("MIMO_API_URL")
 MIMO_MODEL = "xmtp/mimo-v2.5-pro"
 
 SCHEMA_SYSTEM = """You are a senior database architect. Given a business description, design a production-ready PostgreSQL schema.
